@@ -1,8 +1,8 @@
 const std = @import("std");
 const models = @import("models.zig");
 
-// JXA script to export OmniFocus tasks
-const jxa_script =
+// JXA script to export OmniFocus tasks - complete version (no filtering)
+const jxa_script_complete =
     \\(() => {
     \\  const of = Application('OmniFocus');
     \\  const doc = of.defaultDocument;
@@ -61,9 +61,157 @@ const jxa_script =
     \\})();
 ;
 
-pub fn getTasks(allocator: std.mem.Allocator) ![]models.Task {
+// JXA script to export OmniFocus tasks - filtered version (from script3.js)
+const jxa_script_filtered =
+    \\(() => {
+    \\  const of = Application('OmniFocus');
+    \\  const doc = of.defaultDocument;
+    \\  const src = doc.flattenedTasks;
+    \\  const tasks = typeof src === 'function' ? src() : src;
+    \\
+    \\  if (!tasks || tasks.length === 0) {
+    \\    console.log('[]');
+    \\    return;
+    \\  }
+    \\
+    \\  const probe = tasks[0];
+    \\  let propNames = [];
+    \\
+    \\  try {
+    \\    for (const k in probe) {
+    \\      if (typeof probe[k] === 'function' && probe[k].length === 0 && !k.startsWith('_'))
+    \\        propNames.push(k);
+    \\    }
+    \\  } catch (err) {}
+    \\
+    \\  if (propNames.length === 0) {
+    \\    propNames = [
+    \\      'name', 'note', 'creationDate', 'modificationDate', 'completionDate',
+    \\      'dueDate', 'deferDate', 'completed', 'flagged', 'estimatedMinutes',
+    \\      'effectiveDeferDate', 'effectiveDueDate', 'tags', 'project',
+    \\      'parentTask', 'blocked', 'nextTask'
+    \\    ];
+    \\  }
+    \\
+    \\  const scrub = (v) => {
+    \\    if (v === null || v === undefined) return null;
+    \\    if (typeof v === 'boolean' || typeof v === 'number' || typeof v === 'string') return v;
+    \\    if (v instanceof Date) return v.toISOString();
+    \\    if (Array.isArray(v)) return v.map(scrub);
+    \\    if (typeof v.name === 'function') return v.name();
+    \\    try { return v.toString(); } catch { return null; }
+    \\  };
+    \\
+    \\  const dump = (t) => {
+    \\    const o = {};
+    \\    propNames.forEach((p) => {
+    \\      try { o[p] = scrub(t[p]()); } catch (_) {}
+    \\    });
+    \\    try { o.id = t.id.primaryKey; } catch (_) {}
+    \\    try { o.url = scrub(t.url()); } catch (_) {}
+    \\    try {
+    \\      const proj = t.containingProject();
+    \\      o.projectName = proj ? scrub(proj.name()) : null;
+    \\    } catch (_) {}
+    \\    return o;
+    \\  };
+    \\
+    \\  const filtered = tasks.filter((t) => {
+    \\    try {
+    \\      // Filter out completed tasks
+    \\      if (t.completed && t.completed()) return false;
+    \\
+    \\      // Filter out deferred tasks (effectiveDeferDate is in the future)
+    \\      const deferDate = t.effectiveDeferDate ? t.effectiveDeferDate() : null;
+    \\      if (deferDate && new Date(deferDate) > new Date()) return false;
+    \\
+    \\      return true;
+    \\    } catch (_) {
+    \\      return true; // Include tasks we can't check
+    \\    }
+    \\  });
+    \\
+    \\  const out = filtered.map(dump);
+    \\  console.log(JSON.stringify(out, null, 2));
+    \\})();
+;
+
+// JXA script to export inbox tasks only
+const jxa_script_inbox =
+    \\(() => {
+    \\  const of = Application('OmniFocus');
+    \\  const doc = of.defaultDocument;
+    \\  const inbox = doc.inboxTasks;
+    \\  const tasks = typeof inbox === 'function' ? inbox() : inbox;
+    \\
+    \\  if (!tasks || tasks.length === 0) {
+    \\    console.log('[]');
+    \\    return;
+    \\  }
+    \\
+    \\  const probe = tasks[0];
+    \\  let propNames = [];
+    \\
+    \\  try {
+    \\    for (const k in probe) {
+    \\      if (typeof probe[k] === 'function' && probe[k].length === 0 && !k.startsWith('_'))
+    \\        propNames.push(k);
+    \\    }
+    \\  } catch (err) {}
+    \\
+    \\  if (propNames.length === 0) {
+    \\    propNames = [
+    \\      'name', 'note', 'creationDate', 'modificationDate', 'completionDate',
+    \\      'dueDate', 'deferDate', 'completed', 'flagged', 'estimatedMinutes',
+    \\      'effectiveDeferDate', 'effectiveDueDate', 'tags', 'project',
+    \\      'parentTask', 'blocked', 'nextTask'
+    \\    ];
+    \\  }
+    \\
+    \\  const scrub = (v) => {
+    \\    if (v === null || v === undefined) return null;
+    \\    if (typeof v === 'boolean' || typeof v === 'number' || typeof v === 'string') return v;
+    \\    if (v instanceof Date) return v.toISOString();
+    \\    if (Array.isArray(v)) return v.map(scrub);
+    \\    if (typeof v.name === 'function') return v.name();
+    \\    try { return v.toString(); } catch { return null; }
+    \\  };
+    \\
+    \\  const dump = (t) => {
+    \\    const o = {};
+    \\    propNames.forEach((p) => {
+    \\      try { o[p] = scrub(t[p]()); } catch (_) {}
+    \\    });
+    \\    try { o.id = t.id.primaryKey; } catch (_) {}
+    \\    try { o.url = scrub(t.url()); } catch (_) {}
+    \\    try {
+    \\      const proj = t.containingProject();
+    \\      o.projectName = proj ? scrub(proj.name()) : null;
+    \\    } catch (_) {}
+    \\    return o;
+    \\  };
+    \\
+    \\  const out = tasks.map(dump);
+    \\  console.log(JSON.stringify(out, null, 2));
+    \\})();
+;
+
+pub const ExportMode = enum {
+    complete,
+    filtered,
+    inbox,
+};
+
+pub fn getTasks(allocator: std.mem.Allocator, mode: ExportMode) ![]models.Task {
+    // Select the appropriate script based on mode
+    const script = switch (mode) {
+        .complete => jxa_script_complete,
+        .filtered => jxa_script_filtered,
+        .inbox => jxa_script_inbox,
+    };
+    
     // Execute the JXA script using osascript
-    const argv = [_][]const u8{ "osascript", "-l", "JavaScript", "-e", jxa_script };
+    const argv = [_][]const u8{ "osascript", "-l", "JavaScript", "-e", script };
     
     const result = try std.process.Child.run(.{
         .allocator = allocator,
