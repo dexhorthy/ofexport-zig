@@ -30,12 +30,44 @@ pub fn toJson(allocator: std.mem.Allocator, tasks: []const models.Task) ![]const
             try string.appendSlice(allocator, "\",\n");
         }
         
+        if (task.note) |note| {
+            try string.appendSlice(allocator, "    \"note\": \"");
+            try string.appendSlice(allocator, note);
+            try string.appendSlice(allocator, "\",\n");
+        }
+        
+        if (task.project_name) |project| {
+            try string.appendSlice(allocator, "    \"project\": \"");
+            try string.appendSlice(allocator, project);
+            try string.appendSlice(allocator, "\",\n");
+        }
+        
+        if (task.due_date) |due| {
+            try string.appendSlice(allocator, "    \"dueDate\": \"");
+            try string.appendSlice(allocator, due);
+            try string.appendSlice(allocator, "\",\n");
+        }
+        
+        if (task.creation_date) |created| {
+            try string.appendSlice(allocator, "    \"creationDate\": \"");
+            try string.appendSlice(allocator, created);
+            try string.appendSlice(allocator, "\",\n");
+        }
+        
         try string.appendSlice(allocator, "    \"completed\": ");
         try string.appendSlice(allocator, if (task.completed) "true" else "false");
         try string.appendSlice(allocator, ",\n");
         
         try string.appendSlice(allocator, "    \"flagged\": ");
         try string.appendSlice(allocator, if (task.flagged) "true" else "false");
+        
+        if (task.estimated_minutes) |minutes| {
+            try string.appendSlice(allocator, ",\n    \"estimatedMinutes\": ");
+            const minutes_str = try std.fmt.allocPrint(allocator, "{d}", .{minutes});
+            defer allocator.free(minutes_str);
+            try string.appendSlice(allocator, minutes_str);
+        }
+        
         try string.appendSlice(allocator, "\n");
         
         try string.appendSlice(allocator, "  }");

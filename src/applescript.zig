@@ -216,6 +216,7 @@ pub fn getTasks(allocator: std.mem.Allocator, mode: ExportMode) ![]models.Task {
     const result = try std.process.Child.run(.{
         .allocator = allocator,
         .argv = &argv,
+        .max_output_bytes = 10 * 1024 * 1024, // 10MB limit
     });
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
@@ -223,6 +224,12 @@ pub fn getTasks(allocator: std.mem.Allocator, mode: ExportMode) ![]models.Task {
     if (result.term != .Exited or result.term.Exited != 0) {
         std.debug.print("Error executing AppleScript: {s}\n", .{result.stderr});
         return error.AppleScriptFailed;
+    }
+
+    // Handle empty output gracefully
+    if (result.stdout.len == 0) {
+        // Return empty array instead of failing
+        return &.{};
     }
 
     // Parse JSON output
