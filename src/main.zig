@@ -1,7 +1,7 @@
 const std = @import("std");
 const applescript = @import("applescript.zig");
 const models = @import("models.zig");
-const export = @import("export.zig");
+const export_mod = @import("export.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -12,7 +12,7 @@ pub fn main() !void {
     defer std.process.argsFree(allocator, args);
 
     // Default to filtered export mode
-    var export_mode: export.ExportMode = .filtered;
+    var export_mode: export_mod.ExportMode = .filtered;
     var output_file: ?[]const u8 = null;
 
     // Parse command line arguments
@@ -44,16 +44,12 @@ pub fn main() !void {
         }
     }
 
-    // Get tasks from OmniFocus
-    const tasks = try applescript.getTasks(allocator);
+    // Get tasks from OmniFocus using the selected mode
+    const tasks = try applescript.getTasks(allocator, export_mode);
     defer allocator.free(tasks);
 
-    // Apply filtering based on mode
-    const filtered_tasks = try export.filterTasks(allocator, tasks, export_mode);
-    defer allocator.free(filtered_tasks);
-
     // Export to JSON
-    const json_output = try export.toJson(allocator, filtered_tasks);
+    const json_output = try export_mod.toJson(allocator, tasks);
     defer allocator.free(json_output);
 
     // Write output
@@ -62,14 +58,14 @@ pub fn main() !void {
         defer file.close();
         try file.writeAll(json_output);
     } else {
-        const stdout = std.io.getStdOut().writer();
-        try stdout.writeAll(json_output);
+        const stdout_file = std.fs.File.stdout();
+        _ = try stdout_file.write(json_output);
     }
 }
 
 fn printHelp() void {
-    const stdout = std.io.getStdOut().writer();
-    stdout.writeAll(
+    const stdout = std.fs.File.stdout();
+    _ = stdout.write(
         \\ofexport - Export OmniFocus tasks to JSON
         \\
         \\Usage: ofexport [options]

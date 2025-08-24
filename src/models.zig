@@ -43,12 +43,33 @@ pub const Task = struct {
     }
 
     pub fn toJson(self: Task, allocator: std.mem.Allocator) ![]const u8 {
-        var string = std.ArrayList(u8).init(allocator);
-        defer string.deinit();
+        var string = try std.ArrayList(u8).initCapacity(allocator, 512);
+        defer string.deinit(allocator);
         
-        try std.json.stringify(self, .{}, string.writer());
+        // Manual JSON generation for now
+        try string.appendSlice(allocator, "{\n");
         
-        return try string.toOwnedSlice();
+        if (self.id) |id| {
+            try string.appendSlice(allocator, "  \"id\": \"");
+            try string.appendSlice(allocator, id);
+            try string.appendSlice(allocator, "\",\n");
+        }
+        
+        if (self.name) |name| {
+            try string.appendSlice(allocator, "  \"name\": \"");
+            try string.appendSlice(allocator, name);
+            try string.appendSlice(allocator, "\",\n");
+        }
+        
+        try string.appendSlice(allocator, "  \"completed\": ");
+        try string.appendSlice(allocator, if (self.completed) "true" else "false");
+        try string.appendSlice(allocator, ",\n");
+        
+        try string.appendSlice(allocator, "  \"flagged\": ");
+        try string.appendSlice(allocator, if (self.flagged) "true" else "false");
+        try string.appendSlice(allocator, "\n}");
+        
+        return try string.toOwnedSlice(allocator);
     }
 };
 

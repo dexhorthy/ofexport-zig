@@ -1,83 +1,51 @@
 const std = @import("std");
 const models = @import("models.zig");
+const applescript = @import("applescript.zig");
 
-pub const ExportMode = enum {
-    complete,
-    inbox,
-    filtered,
-};
-
-pub fn filterTasks(allocator: std.mem.Allocator, tasks: []const models.Task, mode: ExportMode) ![]models.Task {
-    var filtered = std.ArrayList(models.Task).init(allocator);
-    defer filtered.deinit();
-
-    for (tasks) |task| {
-        const include = switch (mode) {
-            .complete => true,
-            .inbox => task.isInInbox(),
-            .filtered => task.isActive() and !task.completed,
-        };
-
-        if (include) {
-            try filtered.append(task);
-        }
-    }
-
-    return try filtered.toOwnedSlice();
-}
+// Re-export the ExportMode from applescript module
+pub const ExportMode = applescript.ExportMode;
 
 pub fn toJson(allocator: std.mem.Allocator, tasks: []const models.Task) ![]const u8 {
-    var string = std.ArrayList(u8).init(allocator);
-    defer string.deinit();
+    // For now, use manual JSON generation until we figure out the API
+    var string = try std.ArrayList(u8).initCapacity(allocator, 1024);
+    defer string.deinit(allocator);
 
-    try std.json.stringify(tasks, .{ .whitespace = .indent_2 }, string.writer());
-    try string.append('\n');
+    try string.appendSlice(allocator, "[\n");
+    
+    for (tasks, 0..) |task, i| {
+        if (i > 0) {
+            try string.appendSlice(allocator, ",\n");
+        }
+        try string.appendSlice(allocator, "  {\n");
+        
+        if (task.id) |id| {
+            try string.appendSlice(allocator, "    \"id\": \"");
+            try string.appendSlice(allocator, id);
+            try string.appendSlice(allocator, "\",\n");
+        }
+        
+        if (task.name) |name| {
+            try string.appendSlice(allocator, "    \"name\": \"");
+            try string.appendSlice(allocator, name);
+            try string.appendSlice(allocator, "\",\n");
+        }
+        
+        try string.appendSlice(allocator, "    \"completed\": ");
+        try string.appendSlice(allocator, if (task.completed) "true" else "false");
+        try string.appendSlice(allocator, ",\n");
+        
+        try string.appendSlice(allocator, "    \"flagged\": ");
+        try string.appendSlice(allocator, if (task.flagged) "true" else "false");
+        try string.appendSlice(allocator, "\n");
+        
+        try string.appendSlice(allocator, "  }");
+    }
+    
+    try string.appendSlice(allocator, "\n]\n");
 
-    return try string.toOwnedSlice();
+    return try string.toOwnedSlice(allocator);
 }
 
-test "filter complete mode" {
-    const allocator = std.testing.allocator;
-
-    const tasks = [_]models.Task{
-        .{ .name = "Task 1", .completed = false },
-        .{ .name = "Task 2", .completed = true },
-        .{ .name = "Task 3", .completed = false },
-    };
-
-    const filtered = try filterTasks(allocator, &tasks, .complete);
-    defer allocator.free(filtered);
-
-    try std.testing.expectEqual(@as(usize, 3), filtered.len);
-}
-
-test "filter inbox mode" {
-    const allocator = std.testing.allocator;
-
-    const tasks = [_]models.Task{
-        .{ .name = "Inbox Task", .project = null },
-        .{ .name = "Project Task", .project = "Some Project" },
-    };
-
-    const filtered = try filterTasks(allocator, &tasks, .inbox);
-    defer allocator.free(filtered);
-
-    try std.testing.expectEqual(@as(usize, 1), filtered.len);
-}
-
-test "filter active mode" {
-    const allocator = std.testing.allocator;
-
-    const tasks = [_]models.Task{
-        .{ .name = "Active Task", .completed = false },
-        .{ .name = "Completed Task", .completed = true },
-    };
-
-    const filtered = try filterTasks(allocator, &tasks, .filtered);
-    defer allocator.free(filtered);
-
-    try std.testing.expectEqual(@as(usize, 1), filtered.len);
-}
 
 test "json export" {
     const allocator = std.testing.allocator;

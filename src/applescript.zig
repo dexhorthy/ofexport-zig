@@ -230,8 +230,8 @@ pub fn getTasks(allocator: std.mem.Allocator, mode: ExportMode) ![]models.Task {
     defer parsed.deinit();
 
     // Convert to our Task model
-    var tasks = std.ArrayList(models.Task).init(allocator);
-    defer tasks.deinit();
+    var tasks = try std.ArrayList(models.Task).initCapacity(allocator, parsed.value.len);
+    defer tasks.deinit(allocator);
 
     for (parsed.value) |json_task| {
         const task = models.Task{
@@ -256,10 +256,10 @@ pub fn getTasks(allocator: std.mem.Allocator, mode: ExportMode) ![]models.Task {
             .url = if (json_task.url) |url| try allocator.dupe(u8, url) else null,
             .tags = &.{}, // TODO: Handle tags array
         };
-        try tasks.append(task);
+        try tasks.append(allocator, task);
     }
 
-    return try tasks.toOwnedSlice();
+    return try tasks.toOwnedSlice(allocator);
 }
 
 // JSON structure matching the AppleScript output
